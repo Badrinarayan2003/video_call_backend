@@ -2,6 +2,7 @@ const express = require("express");
 const { createServer } = require("http");
 
 const { Server } = require("socket.io");
+const { log } = require("util");
 
 const app = express();
 const server = createServer(app);
@@ -25,6 +26,9 @@ io.on("connection", (socket) => {
         emailToSocketIdMap.set(email, socket.id);
         socketIdToEmailMap.set(socket.id, email);
 
+        // Store the room on the socket object
+        socket.room = room;
+
         io.to(room).emit("user-Joined", { email, id: socket.id });
         socket.join(room);
 
@@ -45,6 +49,26 @@ io.on("connection", (socket) => {
 
     socket.on("peer-nego-done", ({ to, ans }) => {
         io.to(to).emit("peer-nego-final", { from: socket.id, ans });
+    })
+
+
+    socket.on("disconnect", () => {
+        console.log(`user disconnected ${socket.id}`);
+
+        const email = socketIdToEmailMap.get(socket.id);
+
+        if (email) {
+            emailToSocketIdMap.delete(email);
+            socketIdToEmailMap.delete(socket.id);
+
+            // Retrieve the room from the socket object
+            const room = socket.room;
+
+            if (room) {
+                // Notify only other users in the same room
+                socket.to(room).emit("user-disconnected", { email, id: socket.id });
+            }
+        }
     })
 
 });
